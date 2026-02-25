@@ -23,6 +23,7 @@ export default function Home() {
   const [nickInput, setNickInput] = useState("");
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [sending, setSending] = useState(false);
+  const [modalError, setModalError] = useState<string | null>(null);
   const [message, setMessage] = useState<{ type: "ok" | "err"; text: string } | null>(null);
 
   const fetchData = useCallback(async () => {
@@ -70,6 +71,7 @@ export default function Home() {
     if (!nick.trim()) return;
     setSending(true);
     setMessage(null);
+    setModalError(null);
     try {
       const res = await fetch("/api/poke", {
         method: "POST",
@@ -83,15 +85,21 @@ export default function Home() {
         setMessage({ type: "ok", text: "Pokè segnata! 🍣" });
       } else {
         if (res.status === 409 && json.message) {
+          setModalError(json.message);
           setMessage({ type: "err", text: json.message });
         } else if (json.message) {
+          setModalError(json.message);
           setMessage({ type: "err", text: json.message });
         } else {
-          setMessage({ type: "err", text: "Qualcosa è andato storto. Riprova." });
+          const err = "Qualcosa è andato storto. Riprova.";
+          setModalError(err);
+          setMessage({ type: "err", text: err });
         }
       }
     } catch {
-      setMessage({ type: "err", text: "Errore di rete. Riprova." });
+      const err = "Errore di rete. Riprova.";
+      setModalError(err);
+      setMessage({ type: "err", text: err });
     } finally {
       setSending(false);
     }
@@ -199,30 +207,45 @@ export default function Home() {
             className="bg-white rounded-3xl shadow-2xl border border-pink-200 p-6 max-w-sm w-full"
             onClick={(e) => e.stopPropagation()}
           >
-            <p className="text-center text-rose-800 font-medium mb-2">
-              Sei sicuro di aver preso una pokè?
-            </p>
-            <p className="text-center text-rose-500 text-sm mb-6">
-              Così eviti di segnare per sbaglio.
-            </p>
-            <div className="flex gap-3">
-              <button
-                type="button"
-                onClick={() => !sending && setConfirmOpen(false)}
-                disabled={sending}
-                className="flex-1 rounded-2xl border-2 border-rose-200 text-rose-600 py-3 font-medium hover:bg-rose-50 transition disabled:opacity-50"
-              >
-                No, annulla
-              </button>
-              <button
-                type="button"
-                onClick={confirmTakePoke}
-                disabled={sending}
-                className="flex-1 rounded-2xl bg-gradient-to-r from-rose-400 to-orange-400 text-white py-3 font-bold hover:opacity-95 transition disabled:opacity-50"
-              >
-                {sending ? "..." : "Sì! 🍣"}
-              </button>
-            </div>
+            {modalError ? (
+              <>
+                <p className="text-center text-rose-600 font-medium mb-4">{modalError}</p>
+                <button
+                  type="button"
+                  onClick={() => { setConfirmOpen(false); setModalError(null); }}
+                  className="w-full rounded-2xl bg-rose-200 text-rose-800 py-3 font-medium"
+                >
+                  Ok
+                </button>
+              </>
+            ) : (
+              <>
+                <p className="text-center text-rose-800 font-medium mb-2">
+                  Sei sicuro di aver preso una pokè?
+                </p>
+                <p className="text-center text-rose-500 text-sm mb-6">
+                  Così eviti di segnare per sbaglio.
+                </p>
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => !sending && setConfirmOpen(false)}
+                    disabled={sending}
+                    className="flex-1 rounded-2xl border-2 border-rose-200 text-rose-600 py-3 font-medium hover:bg-rose-50 transition disabled:opacity-50"
+                  >
+                    No, annulla
+                  </button>
+                  <button
+                    type="button"
+                    onClick={confirmTakePoke}
+                    disabled={sending}
+                    className="flex-1 rounded-2xl bg-gradient-to-r from-rose-400 to-orange-400 text-white py-3 font-bold hover:opacity-95 transition disabled:opacity-50"
+                  >
+                    {sending ? "..." : "Sì! 🍣"}
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}

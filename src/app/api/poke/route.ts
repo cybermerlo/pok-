@@ -31,18 +31,33 @@ export async function POST(req: NextRequest) {
   }
   if (result.error === "another_user_today") {
     return Response.json(
-      { success: false, error: result.error, message: result.message, data: result.data },
+      {
+        success: false,
+        error: result.error,
+        message: result.message,
+        data: result.data,
+      },
       { status: 409 }
     );
   }
   if (result.error === "zero") {
     return Response.json(
-      { success: false, error: result.error, message: result.message, data: result.data },
+      {
+        success: false,
+        error: result.error,
+        message: result.message,
+        data: result.data,
+      },
       { status: 400 }
     );
   }
   return Response.json(
-    { success: false, error: result.error, data: result.data },
+    {
+      success: false,
+      error: result.error,
+      message: "message" in result ? result.message : undefined,
+      data: result.data,
+    },
     { status: 500 }
   );
 }

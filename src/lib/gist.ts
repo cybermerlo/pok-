@@ -49,7 +49,7 @@ export type UpdateResult =
   | { ok: true; data: PokeData }
   | { ok: false; error: "another_user_today"; message: string; data: PokeData }
   | { ok: false; error: "zero"; message: string; data: PokeData }
-  | { ok: false; error: string; data: PokeData };
+  | { ok: false; error: string; message?: string; data: PokeData };
 
 export async function addPoke(user: string): Promise<UpdateResult> {
   if (!GIST_TOKEN) {
