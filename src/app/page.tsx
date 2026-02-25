@@ -78,23 +78,21 @@ export default function Home() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ user: nick.trim() }),
       });
-      const json = await res.json();
+      const json = await res.json().catch(() => ({}));
       if (json.success && json.data) {
         setData(json.data);
         setConfirmOpen(false);
         setMessage({ type: "ok", text: "Pokè segnata! 🍣" });
       } else {
-        if (res.status === 409 && json.message) {
-          setModalError(json.message);
-          setMessage({ type: "err", text: json.message });
-        } else if (json.message) {
-          setModalError(json.message);
-          setMessage({ type: "err", text: json.message });
-        } else {
-          const err = "Qualcosa è andato storto. Riprova.";
-          setModalError(err);
-          setMessage({ type: "err", text: err });
-        }
+        const errMsg =
+          json.message ||
+          (res.status === 503
+            ? "Storage Vercel Blob non configurato. Crea uno Blob store nel progetto su Vercel."
+            : res.status >= 500
+              ? "Errore del server. Riprova o controlla la configurazione su Vercel."
+              : "Qualcosa è andato storto. Riprova.");
+        setModalError(errMsg);
+        setMessage({ type: "err", text: errMsg });
       }
     } catch {
       const err = "Errore di rete. Riprova.";

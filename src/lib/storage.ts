@@ -1,5 +1,6 @@
-const GIST_ID = process.env.GITHUB_GIST_ID || "a5d66a7703274cb6789773b3936a8c7d";
-const GIST_TOKEN = process.env.GITHUB_GIST_TOKEN;
+import { get, put } from "@vercel/blob";
+
+const BLOB_PATH = "poke/data.json";
 
 export type PokeData = {
   remaining: number;
@@ -19,19 +20,35 @@ function todayISO(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+async function streamToText(stream: ReadableStream<Uint8Array>): Promise<string> {
+  const reader = stream.getReader();
+  const chunks: Uint8Array[] = [];
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (value) chunks.push(value);
+  }
+  const total = chunks.reduce((acc, c) => acc + c.length, 0);
+  const out = new Uint8Array(total);
+  let offset = 0;
+  for (const c of chunks) {
+    out.set(c, offset);
+    offset += c.length;
+  }
+  return new TextDecoder().decode(out);
+}
+
 export async function getPokeData(): Promise<PokeData> {
-  if (!GIST_TOKEN) {
+  if (!process.env.BLOB_READ_WRITE_TOKEN) {
     return DEFAULT_DATA;
   }
   try {
-    const res = await fetch(`https://api.github.com/gists/${GIST_ID}`, {
-      headers: { Authorization: `Bearer ${GIST_TOKEN}` },
-      next: { revalidate: 0 },
-    });
-    if (!res.ok) return DEFAULT_DATA;
-    const gist = (await res.json()) as { files?: { "poke.json"?: { content?: string } } };
-    const raw = gist.files?.["poke.json"]?.content;
-    if (!raw || raw.trim() === "" || raw === "{}") return DEFAULT_DATA;
+    const result = await get(BLOB_PATH, { access: "private", useCache: false });
+    if (!result || result.statusCode !== 200 || !result.stream) {
+      return DEFAULT_DATA;
+    }
+    const raw = await streamToText(result.stream);
+    if (!raw?.trim() || raw === "{}") return DEFAULT_DATA;
     const data = JSON.parse(raw) as Partial<PokeData>;
     const today = todayISO();
     return {
@@ -52,8 +69,13 @@ export type UpdateResult =
   | { ok: false; error: string; message?: string; data: PokeData };
 
 export async function addPoke(user: string): Promise<UpdateResult> {
-  if (!GIST_TOKEN) {
-    return { ok: false, error: "No token", data: DEFAULT_DATA };
+  if (!process.env.BLOB_READ_WRITE_TOKEN) {
+    return {
+      ok: false,
+      error: "No token",
+      message: "Vercel Blob non configurato. Crea uno Blob store nel progetto e aggiungi BLOB_READ_WRITE_TOKEN.",
+      data: DEFAULT_DATA,
+    };
   }
   const data = await getPokeData();
   const today = todayISO();
@@ -79,25 +101,19 @@ export async function addPoke(user: string): Promise<UpdateResult> {
   };
 
   try {
-    const res = await fetch(`https://api.github.com/gists/${GIST_ID}`, {
-      method: "PATCH",
-      headers: {
-        Authorization: `Bearer ${GIST_TOKEN}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        files: { "poke.json": { content: JSON.stringify(next, null, 2) } },
-      }),
+    await put(BLOB_PATH, JSON.stringify(next, null, 2), {
+      access: "private",
+      contentType: "application/json",
+      addRandomSuffix: false,
+      allowOverwrite: true,
     });
-    if (!res.ok) {
-      const err = await res.text();
-      return { ok: false, error: err || res.statusText, data };
-    }
     return { ok: true, data: next };
   } catch (e) {
+    const msg = e instanceof Error ? e.message : "Errore di rete";
     return {
       ok: false,
-      error: e instanceof Error ? e.message : "Network error",
+      error: msg,
+      message: msg,
       data,
     };
   }
