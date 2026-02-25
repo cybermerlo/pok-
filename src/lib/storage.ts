@@ -2,6 +2,15 @@ import { get, put } from "@vercel/blob";
 
 const BLOB_PATH = "poke/data.json";
 
+/** Trova il token Blob: BLOB_READ_WRITE_TOKEN o BLOB_READ_WRITE_TOKEN_xxx (suffisso custom su Vercel) */
+function getBlobToken(): string | undefined {
+  const token = process.env.BLOB_READ_WRITE_TOKEN;
+  if (token) return token;
+  const env = process.env as Record<string, string | undefined>;
+  const key = Object.keys(env).find((k) => k.startsWith("BLOB_READ_WRITE_TOKEN") && env[k]);
+  return key ? env[key] : undefined;
+}
+
 export type PokeData = {
   remaining: number;
   history: { date: string; user: string }[];
@@ -39,11 +48,16 @@ async function streamToText(stream: ReadableStream<Uint8Array>): Promise<string>
 }
 
 export async function getPokeData(): Promise<PokeData> {
-  if (!process.env.BLOB_READ_WRITE_TOKEN) {
+  const token = getBlobToken();
+  if (!token) {
     return DEFAULT_DATA;
   }
   try {
-    const result = await get(BLOB_PATH, { access: "private", useCache: false });
+    const result = await get(BLOB_PATH, {
+      access: "private",
+      useCache: false,
+      token,
+    });
     if (!result || result.statusCode !== 200 || !result.stream) {
       return DEFAULT_DATA;
     }
@@ -69,11 +83,13 @@ export type UpdateResult =
   | { ok: false; error: string; message?: string; data: PokeData };
 
 export async function addPoke(user: string): Promise<UpdateResult> {
-  if (!process.env.BLOB_READ_WRITE_TOKEN) {
+  const token = getBlobToken();
+  if (!token) {
     return {
       ok: false,
       error: "No token",
-      message: "Vercel Blob non configurato. Crea uno Blob store nel progetto e aggiungi BLOB_READ_WRITE_TOKEN.",
+      message:
+        "Vercel Blob non configurato. Vedi README o SETUP-BLOB.md: crea lo store, copia il token in Environment Variables, poi Redeploy.",
       data: DEFAULT_DATA,
     };
   }
@@ -106,6 +122,7 @@ export async function addPoke(user: string): Promise<UpdateResult> {
       contentType: "application/json",
       addRandomSuffix: false,
       allowOverwrite: true,
+      token,
     });
     return { ok: true, data: next };
   } catch (e) {
